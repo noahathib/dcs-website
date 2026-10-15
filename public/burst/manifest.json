@@ -1,0 +1,51 @@
+{
+ "width": 1920,
+ "height": 1080,
+ "frames": 193,
+ "fps": 24,
+ "plumes": [
+  "red",
+  "gold",
+  "buff",
+  "grey",
+  "charcoal"
+ ],
+ "themes": {
+  "light": {
+   "tiers": [
+    {
+     "w": 1920,
+     "h": 1080,
+     "count": 193,
+     "stride": 1,
+     "bytes": 7205358
+    },
+    {
+     "w": 1280,
+     "h": 720,
+     "count": 97,
+     "stride": 2,
+     "bytes": 2197340
+    }
+   ]
+  },
+  "dark": {
+   "tiers": [
+    {
+     "w": 1920,
+     "h": 1080,
+     "count": 193,
+     "stride": 1,
+     "bytes": 7820816
+    },
+    {
+     "w": 1280,
+     "h": 720,
+     "count": 97,
+     "stride": 2,
+     "bytes": 2385700
+    }
+   ]
+  }
+ }
+}

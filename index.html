@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>DCS Inc. Pigments</title>
+    <meta name="description" content="DCS Inc. manufactures iron oxide pigments, liquid and granular color systems, and automated dispensing equipment for architectural precast, cast stone, manufactured stone veneer and masonry. Milwaukee, since 1890." />
+    <meta property="og:site_name" content="DCS Inc" />
+    <meta property="og:title" content="DCS Inc. | The color of today's architecture" />
+    <meta property="og:type" content="website" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Archivo:ital,wdth,wght@0,62..125,100..900;1,62..125,100..900&family=IBM+Plex+Mono:wght@400;500&family=Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,300..600&display=swap"
+    />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+    <script>
+      // Opened straight from disk, this development entry can't run. Say where the viewable site is.
+      setTimeout(function () {
+        var r = document.getElementById("root");
+        if (r && !r.firstChild) {
+          r.innerHTML =
+            '<p style="font:16px/1.5 system-ui,sans-serif;padding:24px;max-width:40em">This is the development entry point. ' +
+            "To view the site, open <b>build/index.html</b>, or run <code>npm run dev</code> in this folder and visit http://localhost:5173.</p>";
+        }
+      }, 2500);
+    </script>
+  </body>
+</html>
