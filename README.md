@@ -62,6 +62,9 @@ grounds were baked to the page's `--cement` colors. Scrolling scrubs the burst: 
 - **Fluid response.** The image sequence eases toward scroll over a 120 ms response time, without a hard catch-up jump.
   Rendering is capped at the source resolution. Animation and frame loading pause offscreen or in a hidden tab, and
   a settled canvas waits for frame-ready notifications instead of polling. Section reveals fade without moving the text.
+- **Trackpad sensitivity.** `src/lib/scrollSensitivity.ts` halves vertical pixel-based trackpad travel across every page,
+  retaining device momentum without adding easing. Horizontal gestures, nested scrollers, dialogs, form controls,
+  zoom gestures, keyboard navigation, touch and scrollbars retain their native behavior.
 - The pre-redesign page is kept for reference in `../original-site/` (`index.html` opens directly; `source/` has its `src`).
 
 ## Structure

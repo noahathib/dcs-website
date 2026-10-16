@@ -2,6 +2,7 @@ import { Component, useEffect, useRef, type ReactNode } from "react";
 import { ROUTES } from "@/data/site";
 import { isKnownRoute, useRoute } from "@/lib/router";
 import { useReveal } from "@/lib/reveal";
+import { useScrollSensitivity } from "@/lib/scrollSensitivity";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import Home from "@/pages/Home";
@@ -72,6 +73,7 @@ export default function App() {
   }, [n]);
 
   useReveal(route);
+  useScrollSensitivity(n);
 
   return (
     <>
