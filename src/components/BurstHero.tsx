@@ -210,6 +210,7 @@ export function BurstHero() {
   const live = !reduce && !!geo && geo.stageH >= 420;
 
   const sectionRef = useRef<HTMLElement>(null);
+  const sectionBounds = useRef({ top: 0, bottom: 0 });
   const copyRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const colorRef = useRef<HTMLElement>(null);
@@ -263,6 +264,15 @@ export function BurstHero() {
     };
   }, [live, geo]);
 
+  // Geometry changes only on layout/resize, not while scrolling. Cache document coordinates so the animation
+  // loop and header do not force layout reads after other frame callbacks have written transforms.
+  useLayoutEffect(() => {
+    const section = sectionRef.current;
+    if (!section) return;
+    const top = section.getBoundingClientRect().top + window.scrollY;
+    sectionBounds.current = { top, bottom: top + section.offsetHeight };
+  }, [geo, live, epoch]);
+
   // Header sits on the plate as one sheet while the hero is under it; a compact CTA appears once the hero's own CTAs
   // have scrolled away (tablet widths, where the header has no CTA of its own).
   useEffect(() => {
@@ -274,8 +284,9 @@ export function BurstHero() {
     let raf = 0;
     const check = () => {
       raf = 0;
-      const r = section.getBoundingClientRect();
-      const on = r.top <= header + 8 && r.bottom > header;
+      const { top, bottom } = sectionBounds.current;
+      const y = window.scrollY + header;
+      const on = top <= y + 8 && bottom > y;
       if (on !== "plate" in root.dataset) {
         if (on) root.dataset.plate = "";
         else delete root.dataset.plate;
@@ -300,7 +311,7 @@ export function BurstHero() {
       delete root.dataset.plate;
       delete root.dataset.heroCtaGone;
     };
-  }, [live]);
+  }, [live, geo]);
 
   // Caption widths set their spacing: measured before paint, and again whenever one changes size (web fonts).
   useLayoutEffect(() => {
@@ -324,10 +335,7 @@ export function BurstHero() {
   }, []);
 
   /** Scroll offset into the hero: 0 with the hero's top at the stage's pin line, T where the stage releases. */
-  const progressPx = (g: Geo) => {
-    const sec = sectionRef.current;
-    return sec ? g.top - sec.getBoundingClientRect().top : 0;
-  };
+  const progressPx = (g: Geo) => window.scrollY + g.top - sectionBounds.current.top;
 
   /** The canvas, then the five captions. */
   const placed = () => {
@@ -355,7 +363,7 @@ export function BurstHero() {
     const sec = sectionRef.current;
     if (!els || !sec) return;
     placeNow(geo, progressPx(geo)); // what shows until the animations start
-    const start = sec.getBoundingClientRect().top + window.scrollY - geo.top; // page scroll at s = 0
+    const start = sectionBounds.current.top - geo.top; // page scroll at s = 0
     // sampled every 4px of scroll: linear interpolation in between is within 0.01px of the curves
     const anims = bindToScroll(
       els.map((el, i) => ({ el, at: (s: number) => poses(geo, s)[i] })),

@@ -112,8 +112,8 @@ const decoders = () => (pool ??= new DecoderPool(typeof Worker === "function" ? 
 
 /**
  * One theme/tier of frames.
- * - Network: compressed frames load coarse to fine (every 16th frame first, then 8th, 4th, 2nd, all), nearest to the
- *   reader first. Over http they are kept as small Blobs (about 7 MB for the whole set); from file:// as <img>.
+ * - Network: a small neighborhood of the reader loads first, then the rest loads coarse to fine (every 16th frame,
+ *   then 8th, 4th, 2nd, all). Over http they are kept as small Blobs (about 7 MB for the whole set); from file:// as <img>.
  * - Decode (http): only frames around the reader are decoded, in workers. The window leads the reader by its speed
  *   times the decode latency, thins out to every 2nd/4th... frame when the reader moves faster than decoding can keep
  *   up, and only turns round after a few frames of travel the other way. The frames on screen are never released.
@@ -130,6 +130,8 @@ export class FrameSet {
   private requested: boolean[];
   private inflight = 0;
   private stopped = false;
+  private aimed = false;
+  private concurrency = 6;
   private failures = 0;
   /** tier index the reader is at, which way they are going, and how fast (tier frames per ms) */
   focus = 0;
@@ -155,26 +157,37 @@ export class FrameSet {
   }
 
   start(concurrency = 6) {
-    this.request(0, true);
-    for (let n = 1; n < concurrency; n++) this.next();
+    this.concurrency = concurrency;
+    // The caller may be restoring a scroll position. Wait for aim instead of spending the first requests and
+    // decodes on frame zero, and use the same rule when a cached set resumes at a different position.
+    if (this.stopped || !this.aimed) return;
+    if (this.inflight < concurrency && !this.requested[this.focus]) this.request(this.focus, true);
+    for (let n = this.inflight; n < concurrency; n++) this.next();
+    this.pump();
   }
 
-  /** pause network work (frames already loaded stay usable) */
+  /** Pause new network and decode work; loaded frames remain usable until the next aim. */
   stop() {
     this.stopped = true;
+    this.aimed = false;
   }
 
   resume() {
     if (!this.stopped) return;
     this.stopped = false;
-    const free = 6 - this.inflight;
-    for (let n = 0; n < free; n++) this.next();
-    this.pump();
+    this.start(this.concurrency);
   }
 
   private next() {
-    if (this.stopped) return;
+    if (this.stopped || !this.aimed) return;
     const count = this.tier.count;
+    // Adjacent frames make fractional playback possible. Complete this bounded neighborhood before distant
+    // coarse coverage, favoring the direction of travel when two candidates are equally close.
+    for (let distance = 0; distance <= 6; distance++) {
+      for (const i of [this.focus + this.dir * distance, this.focus - this.dir * distance]) {
+        if (i >= 0 && i < count && !this.requested[i]) return this.request(i, false);
+      }
+    }
     for (const step of [16, 8, 4, 2, 1]) {
       let best = -1;
       let bestD = Infinity;
@@ -240,7 +253,7 @@ export class FrameSet {
 
   /** Decode the frames the reader is heading into; release the ones they have left. */
   pump() {
-    if (!this.useBlob) return;
+    if (!this.useBlob || this.stopped || !this.aimed) return;
     const n = this.tier.count;
     const { lo, hi, step, start } = this.plan();
     const keep = (i: number) => (i >= lo && i <= hi) || this.shown.includes(i);
@@ -297,6 +310,13 @@ export class FrameSet {
   aim(fi: number, speed = 0) {
     const i = Math.round(Math.min(Math.max(fi, 0), this.tier.count - 1));
     this.speed = speed;
+    if (!this.aimed) {
+      this.aimed = true;
+      this.focus = i;
+      this.against = 0;
+      this.start(this.concurrency);
+      return;
+    }
     if (i === this.focus) return;
     const d = i > this.focus ? 1 : -1;
     if (d === this.dir) this.against = 0;
