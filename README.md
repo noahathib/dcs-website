@@ -43,7 +43,7 @@ grounds were baked to the page's `--cement` colors. Scrolling scrubs the burst: 
 
 - **Frames, not video.** `public/burst/{light,dark}/{1920,1280}/NNN.webp` are frames 0-192 of each clip (the clips loop back to
   frame 0 after 192). Desktop gets every frame at 1920 px (about 7 MB), phones every second frame at 1280 px (about 2 MB). They load
-  coarse to fine, nearest to the reader first. Over http they are decoded in workers, a window that leads the reader by its
+  adjacent to the reader first, then coarse to fine across the rest of the sequence. Over http they are decoded in workers, a window that leads the reader by its
   speed; the frames on screen are never released, and the canvas never blanks while it waits. From disk the browser decodes each `<img>` as it loads. Rebuild them with
   `scripts/burst-frames/` (see its README).
 - **Seamless ground.** A WebGL painter keys the frames' ground to transparent, so the page's own CSS background shows through and
@@ -59,6 +59,9 @@ grounds were baked to the page's `--cement` colors. Scrolling scrubs the burst: 
   `src/components/Burst.tsx` (scroll loop, frame index), `src/lib/scrollLinked.ts` (compositor placement), `src/lib/burst.ts`
   (loader, decode workers, painters), `src/data/burst.ts` (tiers, plume positions).
 - **Reduced motion** (and screens under 420 px tall) get a still of the densest frame, with no pinning.
+- **Fluid response.** The image sequence eases toward scroll over a 120 ms response time, without a hard catch-up jump.
+  Rendering is capped at the source resolution. Animation and frame loading pause offscreen or in a hidden tab, and
+  a settled canvas waits for frame-ready notifications instead of polling. Section reveals fade without moving the text.
 - The pre-redesign page is kept for reference in `../original-site/` (`index.html` opens directly; `source/` has its `src`).
 
 ## Structure

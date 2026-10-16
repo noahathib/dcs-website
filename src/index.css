@@ -733,9 +733,9 @@ li:last-child > .related-line { border-bottom: 1px solid var(--rule); }
 .related span { color: var(--ink-3); font-size: 0.9rem; line-height: 1.45; padding-right: 12px; }
 
 /* ---------- Motion ---------- */
-/* Content is visible at rest. Entering elements only settle in with a small transform. */
-.rv.is-in { animation: settle 0.9s var(--ease) both; }
-@keyframes settle { from { transform: translateY(18px); } to { transform: none; } }
+/* Keep sections in place as they enter view: a reveal must not jump against the reader's scroll. */
+.rv.is-in { animation: reveal 0.45s var(--ease) both; }
+@keyframes reveal { from { opacity: 0.7; } to { opacity: 1; } }
 .load-1 { animation: rise 0.9s var(--ease) both; }
 .load-2 { animation: rise 0.9s 0.08s var(--ease) both; }
 .load-3 { animation: rise 0.9s 0.16s var(--ease) both; }

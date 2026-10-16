@@ -1,6 +1,7 @@
 import { useEffect, useRef, type RefObject } from "react";
 import { FrameSet, LAST_FRAME, frameSet, canvasPainter, currentTheme, glCanUpload, glPainter, parseRgb, pickTier, type Drawable, type Painter } from "@/lib/burst";
 import type { BurstTheme } from "@/data/burst";
+import { advanceBurstProgress } from "@/lib/burstMotion";
 
 export type BurstState = {
   /** scroll progress, 0..1, exactly where the page is */
@@ -76,7 +77,8 @@ export function useBurst(canvasRef: RefObject<HTMLCanvasElement | null>, options
     let frameMs = 16; // display frame interval, kept across idle so a gesture's first step is the right size
     let speed = 0; // tier frames per ms, smoothed
     let raf = 0;
-    let visible = true;
+    let inView = true;
+    let visible = !document.hidden;
     let dirty = true;
     let drawn = "";
     let painted = false;
@@ -89,20 +91,23 @@ export function useBurst(canvasRef: RefObject<HTMLCanvasElement | null>, options
       if (set) set.onFrame = () => {};
       set?.stop();
       const s = frameSet(theme, tier);
-      s.aim(o.frame(Math.max(shown, 0)) / tier.stride);
+      s.aim(o.frame(shown < 0 ? o.progress() : shown) / tier.stride);
       s.onFrame = () => {
         dirty = true;
         kick();
       };
       set = s;
+      if (!visible) s.stop();
       dirty = true;
     };
 
     const size = () => {
       // layout size: the canvas's transform (its placement) must not resize it
-      const ndpr = Math.min(Math.max(window.devicePixelRatio || 1, 1), 2);
       const nw = canvas.offsetWidth;
       const nh = canvas.offsetHeight;
+      const tier = pickTier(theme, nw);
+      // Rendering above the source resolution adds GPU work without adding image detail.
+      const ndpr = Math.min(Math.max(window.devicePixelRatio || 1, 1), 2, tier.w / Math.max(nw, 1), tier.h / Math.max(nh, 1));
       if (nw === w && nh === h && ndpr === dpr) return;
       w = nw;
       h = nh;
@@ -122,19 +127,18 @@ export function useBurst(canvasRef: RefObject<HTMLCanvasElement | null>, options
       const o = opts.current;
       raw = o.progress();
       const prev = shown < 0 ? raw : shown;
-      let next = prev + (raw - prev) * (1 - Math.exp(-dt / 55));
-      // Fast scrolls play through at scroll speed with a bounded lag (about 23 frames) rather than cutting ahead, which
-      // would skip a quarter of the clip in one frame and empty the decode window.
-      next = Math.min(Math.max(next, raw - 0.12), raw + 0.12);
-      if (Math.abs(raw - next) < 0.0002) next = raw;
+      // Do not clamp lag to a distance: a large wheel step would cut straight to that bound.
+      const next = advanceBurstProgress(prev, raw, dt);
       if (set && w > 0 && h > 0) {
         const frame = Math.min(Math.max(o.frame(next), 0), LAST_FRAME);
         const step = shown < 0 ? 0 : (frame - Math.min(Math.max(o.frame(prev), 0), LAST_FRAME)) / set.tier.stride;
-        speed = speed * 0.6 + (step / dt) * 0.4;
+        speed += (step / dt - speed) * -Math.expm1(-dt / 45);
         set.aim(frame / set.tier.stride, speed);
         const key = frame.toFixed(2);
-        const sample = set.first();
-        if (sample) ensurePainter(sample);
+        if (!painter && !glLost) {
+          const sample = set.first();
+          if (sample) ensurePainter(sample);
+        }
         if (dirty || key !== drawn) {
           const done = painter?.paint(set, frame, { x: 0, y: 0, w, h }, dpr) ?? "none";
           if (done !== "none") {
@@ -150,24 +154,45 @@ export function useBurst(canvasRef: RefObject<HTMLCanvasElement | null>, options
         }
       }
       shown = next;
-      if (shown !== raw || dirty) kick();
+      // Loading/decoding wakes us through onFrame. Waiting for it must not busy-loop at display rate.
+      if (shown !== raw) kick();
       else last = 0;
     };
 
     function kick() {
-      if (!raf && visible) raf = requestAnimationFrame(tick);
+      if (!raf && visible && !glLost) raf = requestAnimationFrame(tick);
     }
 
     const onScroll = () => kick();
+    const onResize = () => {
+      size();
+      kick();
+    };
+    const syncVisibility = () => {
+      const next = inView && !document.hidden;
+      if (next === visible) return;
+      visible = next;
+      if (visible) {
+        // Return at the reader's current position, without replaying a gesture made offscreen.
+        shown = -1;
+        if (set) set.aim(opts.current.frame(opts.current.progress()) / set.tier.stride);
+        set?.resume();
+        dirty = true;
+        kick();
+      } else {
+        cancelAnimationFrame(raf);
+        raf = 0;
+        last = 0;
+        speed = 0;
+        set?.stop();
+      }
+    };
     const ro = new ResizeObserver(size);
     ro.observe(canvas);
     const io = new IntersectionObserver(
       ([e]) => {
-        visible = e.isIntersecting;
-        if (visible) {
-          dirty = true;
-          kick();
-        }
+        inView = e.isIntersecting;
+        syncVisibility();
       },
       { rootMargin: "200px 0px" },
     );
@@ -178,6 +203,7 @@ export function useBurst(canvasRef: RefObject<HTMLCanvasElement | null>, options
       if (t === theme) return;
       theme = t;
       syncGround(); // CSS has already switched --cement for the new scheme
+      size();
       loadSet();
       kick();
     };
@@ -185,11 +211,15 @@ export function useBurst(canvasRef: RefObject<HTMLCanvasElement | null>, options
     const mo = new MutationObserver(onTheme);
     mo.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
     window.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("resize", onScroll);
+    window.addEventListener("resize", onResize);
+    document.addEventListener("visibilitychange", syncVisibility);
     const onLost = (e: Event) => {
       e.preventDefault();
       painter = null;
       glLost = true;
+      cancelAnimationFrame(raf);
+      raf = 0;
+      last = 0;
     };
     const onRestored = () => {
       glLost = false;
@@ -207,7 +237,8 @@ export function useBurst(canvasRef: RefObject<HTMLCanvasElement | null>, options
     return () => {
       cancelAnimationFrame(raf);
       window.removeEventListener("scroll", onScroll);
-      window.removeEventListener("resize", onScroll);
+      window.removeEventListener("resize", onResize);
+      document.removeEventListener("visibilitychange", syncVisibility);
       ro.disconnect();
       io.disconnect();
       mo.disconnect();

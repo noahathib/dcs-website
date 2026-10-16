@@ -2,7 +2,7 @@ import { useEffect } from "react";
 
 /**
  * Adds `.is-in` to `.rv` elements as they enter the viewport. Elements are fully visible
- * before and after; `.is-in` only plays a short settle transform (see index.css).
+ * before and after; `.is-in` only plays a short opacity fade, without shifting their position (see index.css).
  */
 export function useReveal(dep: unknown) {
   useEffect(() => {
